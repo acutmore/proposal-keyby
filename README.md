@@ -78,10 +78,12 @@ Introduce a `CompositeKey` type. This type can represent the compound equality o
 let key1 = new CompositeKey(0, 0);
 let key2 = new CompositeKey(0, 0);
 let key3 = new CompositeKey(0, 1);
-key1 === key2; // separate objects
+key1 !== key2; // separate objects
 CompositeKey.equal(key1, key2); // true
 CompositeKey.equal(key1, key3); // false
 Reflect.ownKeys(key1); // [] - opaque empty object from the outside
+key1 instanceof CompositeKey; // true
+Object.isFrozen(key1); // false
 ```
 
 ### Map and Set config (phase 1)
