@@ -93,11 +93,11 @@ Allow `Map` and `Set` instances to be customized with a lookup function that wil
 ```js
 let positions = new Set([], { keyBy: ({x, y}) => new CompositeKey(x, y), });
 
-positions.add({ x: 0, y: 0 });
-positions.add({ x: 0, y: 0 });
+positions.add({ x: 0, y: 0, z: 1 });
+positions.add({ x: 0, y: 0, z: 99 }); // 'z' prop is not inspected by the keyBy function
 positions.add({ x: 0, y: 1 });
 
-positions.values().toArray(); // [{ x: 0, y: 0 }, { x:0, y: 1 }]
+positions.values().toArray(); // [{ x: 0, y: 0, z: 1 }, { x:0, y: 1 }]
 ```
 
 ### Symbol.keyBy (follow on?)
