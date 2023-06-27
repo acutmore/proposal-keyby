@@ -175,7 +175,12 @@ Immutable values types such as those in Temporal can implement `Symbol.keyBy`, w
 - Why are the `Map` and `Set` changes opt-in, and do not work with existing default constructors `new Map()` and `new Set()`?
     - Adding `Symbol.keyBy` to an object could invalidate existing code that assumes `Map` and `Set` will use object identity.
     - The opt-in mode can be strict, and throw an Error if a value does not implement `Symbol.keyBy` rather than silently falling back to object identity.
+- Why not have a more traditional API where values implement a `hash()` and `equals(other)` methods?
+    - A risk in implementing these methods separately is that they can be mis-aligned if one method is updated/refactored and the other isn't. Resulting in values that are equal but don't have match `hash` values.
+    - A `CompositeKey` can be thought of as a type that implements these on behalf of the user, ensuring that the two methods are aligned and equality follows the rules of reflectivity, symmetry, transitivity and consistency.
+    - The downside to this is that when comparing if two values are equal by comparing their `CompositeKeys`, both values need to produce a full `CompositeKey` rather than doing this gradually and exiting early as soon as one part does not match. A separate API for this use case could avoid this issue.
 - What about `WeakMap` and `WeakSet`?
     - More investigation required.
     - a `keyBy` function for these makes less sense because if the function returns a new value then the only reference to that value will be held weakly and therefore eligible for collection.
-    - A `new CompositeKey(0, 0)` does not hold any lifetime information, a matching `CompositeKey` can always be created.
+    - A `new CompositeKey(0, 0)` does not hold any lifetime information, a matching `CompositeKey` can always be created if the _inputs_ are available.
+    - Allowing only `CompositeKeys` that were created from at least one value that itself is allowed as a `WeakMap` key could be an option.
