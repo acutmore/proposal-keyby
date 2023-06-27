@@ -4,12 +4,19 @@
 (function () {
     const { Map: OriginalMap } = globalThis;
 
+    let symbolsAsWeakMapKeys = false;
+    try {
+        // @ts-expect-error
+        new WeakSet([Symbol()]);
+        symbolsAsWeakMapKeys = true;
+    } catch {}
+
     /** @return {boolean} */
     function valueWithIdentity(v) {
         return (
             (typeof v === "object" && v !== null) ||
             typeof v === "function" ||
-            (typeof v === "symbol" && Symbol.keyFor(v) !== undefined)
+            (symbolsAsWeakMapKeys && typeof v === "symbol" && Symbol.keyFor(v) !== undefined)
         );
     }
 
@@ -249,7 +256,7 @@
 
     /** @private */
     class GCNode extends AbstractNode {
-        static #transitionMarker = Symbol("<transition>");
+        static #transitionMarker = symbolsAsWeakMapKeys ? Symbol("<transition>") : {"<transition>": true};
 
         /**
          * @param {AbstractNode | null} parent
