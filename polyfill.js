@@ -11,11 +11,19 @@
         symbolsAsWeakMapKeys = true;
     } catch {}
 
+
+    /** @return {boolean} */
+    function isObject(v) {
+        return (
+            (typeof v === "object" && v !== null) ||
+            typeof v === "function"
+        );
+    }
+
     /** @return {boolean} */
     function valueWithIdentity(v) {
         return (
-            (typeof v === "object" && v !== null) ||
-            typeof v === "function" ||
+            isObject(v) ||
             (symbolsAsWeakMapKeys && typeof v === "symbol" && Symbol.keyFor(v) !== undefined)
         );
     }
@@ -311,6 +319,14 @@
     /** @private */
     const SymbolKeyBy = Symbol("Symbol.keyBy");
 
+    function trySymbol(v) {
+        if (isObject(v)) {
+            let k = v[SymbolKeyBy];
+            return typeof k === "function" ? Reflect.apply(k, v, []) : v;
+        }
+        return v;
+    }
+
     /** @public */
     class CompositeKey {
         static {
@@ -322,11 +338,11 @@
         /** @type {OpaqueId} */
         #id;
 
-        constructor(...values) {
+        constructor(values = []) {
             this.#id = CompositeKey.#root.getId(values);
         }
 
-        get [SymbolKeyBy]() {
+        [SymbolKeyBy]() {
             return this;
         }
 
@@ -336,6 +352,10 @@
 
         static equal(a, b) {
             return a.#id === b.#id;
+        }
+
+        static of(...values) {
+            return new CompositeKey(values.map(trySymbol));
         }
 
         /** @private */
@@ -351,35 +371,18 @@
 
         /**
          * @param {ReadonlyArray<ReadonlyArray<any>> | Iterable<ReadonlyArray<any>> | null} [values]
-         * @param {{ keyBy?: symbol | string | ((k) => unknown) }} [config]
+         * @param {{ keyBy?: ((k) => unknown) }} [config]
          */
         constructor(values, config) {
             const keyByConfig = config?.keyBy;
             if (keyByConfig === undefined) {
                 this.#keyBy = (v) => v;
             } else {
-                /** @type {(k) => unknown} */
-                let keyByFunction;
-                if (
-                    typeof keyByConfig === "symbol" ||
-                    typeof keyByConfig === "string"
-                ) {
-                    const propertyKey = keyByConfig;
-                    keyByFunction = (v) => {
-                        return v &&
-                            (typeof v === "object" || typeof v === "function")
-                            ? v[propertyKey]
-                            : v;
-                    };
-                } else if (typeof keyByConfig === "function") {
-                    keyByFunction = keyByConfig;
-                } else {
-                    throw new TypeError();
+                if (typeof keyByConfig !== "function") {
+                    throw new TypeError(`keyBy must be a function`);
                 }
-
-                const keyByFn = keyByFunction;
                 this.#keyBy = (v) => {
-                    let k = keyByFn(v);
+                    let k = keyByConfig(v);
                     if (CompositeKey.isKey(k)) {
                         k = CompositeKey["__keyId"](k);
                     }
@@ -452,38 +455,39 @@
         static get [Symbol.species]() {
             return Map;
         }
+
+        /**
+         * @param {ReadonlyArray<ReadonlyArray<any>> | Iterable<ReadonlyArray<any>> | null} [values]
+         */
+        static usingKeys(values) {
+            return new this(values, { keyBy: trySymbol });
+        }
     }
 
     /** @private */
     const RecordNamespace = Symbol();
 
     function keyForRecord(r) {
-        return new CompositeKey(
+        return new CompositeKey([
             RecordNamespace,
             ...Object.entries(r)
                 .sort(([k1], [k2]) => k1.localeCompare(k2)) // TODO symbol keys?
                 .flatMap(([k, v]) => {
-                    if (typeof v === "object" && v !== null) {
-                        // TODO should this do a 'has' check first?
-                        let keyBy = v[SymbolKeyBy];
-                        if (keyBy !== undefined) {
-                            v = keyBy;
-                        }
-                    }
+                    v = trySymbol(v);
                     return [k, v];
                 }),
-        );
+        ]);
     }
 
     /** @public */
     function Record(obj) {
         let ck;
-        const r = Object.freeze({
-            ...obj,
-            get [SymbolKeyBy]() {
-                return (ck ??= keyForRecord(r));
-            },
+        const r = { ...obj };
+        Object.defineProperty(r, SymbolKeyBy, {
+            enumerable: false,
+            value: () => ck ??= keyForRecord(r)
         });
+        Object.freeze(r);
         return r;
     }
 

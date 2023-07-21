@@ -5,31 +5,32 @@ This is a different take on https://github.com/tc39/proposal-richer-keys, lookin
 
 ## The issue
 
-Right now `Map` and `Set` always use SameValueZero for their internal equality predicate for answering "Is this value in this collection?".
+Right now `Map` and `Set` always use [SameValueZero](https://tc39.es/ecma262/multipage/abstract-operations.html#sec-samevaluezero) for their internal equality predicate answering "Is this value in this collection?".
 
 ```js
-new Set([42, 42]).size === 1;
+new Set([42, 42]).size; // 1
+new Set([{}, {}]).size; // 2;
 
 let m = new Map();
+
 m.set("hello", "world");
-m.get("hello") === "world";
+m.set({}, "object");
+
+m.get("hello"); // "world";
+m.has({});      // false
 ```
 
-This means that when it comes to objects, all objects are only equal to themselves. There is no capability to override this behavior and allow two different objects to be treated equal within the collection.
+As shown above, this means that when it comes to objects, all objects are only equal to themselves. There is no capability to override this behavior and allow two different objects to be treated equal within the collection.
 
 ```js
-let item1 = {
-    position: Object.freeze({ x: 0, y: 0 }),
-};
-let item2 = {
-    position: Object.freeze({ x: 0, y: 0 }),
-};
+let position1 = Object.freeze({ x: 0, y: 0 });
+let position2 = Object.freeze({ x: 0, y: 0 });
 
-const positions = new Set([item1.position, item2.position]);
+let positions = new Set([position1, position2]);
 positions.size; // 2
 ```
 
-In Python:
+Whereas in Python:
 
 ```py
 position1 = (0, 0)
@@ -42,13 +43,12 @@ positions.add(position2)
 print(len(positions)) # 1
 ```
 
-Clojure:
+or Clojure:
 
 ```clj
-cljs.user=> (def position1 (list 0 0))
-cljs.user=> (def position2 (list 0 0))
-cljs.user=> (count (set (list position1 position2)))
-> 1
+(def position1 '(0 0))
+(def position2 '(0 0))
+(count (set [position1 position2])) ; 1
 ```
 
 ### Current workaround
@@ -56,14 +56,33 @@ cljs.user=> (count (set (list position1 position2)))
 One way to work around this limitation in JavaScript is to construct a string representation of the value.
 
 ```js
-const positions = new Set([JSON.stringify(item1.position), JSON.stringify(item2.position)]);
+const positions = new Set([JSON.stringify(position1), JSON.stringify(position2)]);
 positions.size; // 1
 ```
 
 The downsides of this are:
 
-- It can be easy to construct incorrect strings, for example `JSON.stringify` will produce a different string if the object keys are enumerated in a different order.
+- It can be easy to construct incorrect strings, for example `JSON.stringify` will produce a different string if the object keys are enumerated in a different order or throw if the value does not have a built-in JSON representation.
 - The collection now contains strings and not structured objects. To read the values back out they would need to be parsed.
+
+Alternatively two collections can be used, one to track uniqueness and another to track values:
+
+```js
+const positions = [];
+const positionKeys = new Set();
+function add(position) {
+    const asString = JSON.stringify(position);
+    if (positionKeys.has(asString)) return;
+    positions.push(position);
+    positionKeys.add(asString);
+}
+```
+
+The downsides of this are:
+
+- Code needs to ensure the two collections are kept in-sync with each other.
+- Extra noise/boilerplate to follow this pattern
+- Same risk as above of flattening a value to a string
 
 ## Proposal Ideas:
 
@@ -75,15 +94,49 @@ Listing all of them here is to set out a vision of where we could end up in the 
 Introduce a `CompositeKey` type. This type can represent the compound equality of a sequence of values.
 
 ```js
-let key1 = new CompositeKey(0, 0);
-let key2 = new CompositeKey(0, 0);
-let key3 = new CompositeKey(0, 1);
-key1 !== key2; // separate objects
-CompositeKey.equal(key1, key2); // true
-CompositeKey.equal(key1, key3); // false
-Reflect.ownKeys(key1); // [] - opaque empty object from the outside
-key1 instanceof CompositeKey; // true
-Object.isFrozen(key1); // false
+let key1 = new CompositeKey([0, 0]);
+let key2 = new CompositeKey([0, 0]);
+let key3 = new CompositeKey([0, 1]);
+key1 !== key2;                       // true (separate objects)
+CompositeKey.equal(key1, key2);      // true
+CompositeKey.equal(key1, key3);      // false
+Reflect.ownKeys(key1);               // []   (opaque empty object from the outside)
+key1 instanceof CompositeKey;        // true
+Object.isFrozen(key1);               // false (key value is internal+private)
+```
+
+This addresses the issue of attempting to use strings to represent the equality of structured values.
+
+`CompositeKey` can be used recursively allowing arbitrary structures to be represented (a-la Lisp):
+
+```js
+class TreeNode {
+    #value
+    #leafs;
+
+    constructor(value, leafs = []) {
+        this.value = value; this.leafs = leafs;
+    }
+
+    getKey() {
+        return new CompositeKey([
+            TreeNode,
+            this.#value,
+            ...this.#leafs.map(l => l.getKey()), // a key of keys
+        ]);
+    }
+}
+
+const n = (v, l) => new TreeNode(v, l);
+const makeTree = () => n(
+    "root",
+    [
+        n("left"),
+        n("right")
+    ]
+);
+
+CompositeKey.equal(makeTree().getKey(), makeTree().getKey()); // true
 ```
 
 ### Map and Set config (phase 1)
@@ -91,7 +144,28 @@ Object.isFrozen(key1); // false
 Allow `Map` and `Set` instances to be customized with a lookup function that will produce the value that represents the keys values for that collection. In this mode the representative values are considered equal if they are `SameValueZero` equal, or if they are both `CompositeKey`s and equal according to `CompositeKey.equal`.
 
 ```js
-let positions = new Set([], { keyBy: ({x, y}) => new CompositeKey(x, y), });
+let keyBySet = new Set([], { keyBy: (v) => v.uuid, });
+keyBySet.add({ uuid: "ABCDE" });
+keyBySet.has({ uuid: "ABCDE" }); // true
+[...keyBySet];                   // [{ uuid: "ABCDE" }]
+```
+
+This addresses the issue of using two separate collections to achieve these semantics.
+
+```js
+let positions = new Set([], { keyBy: ({x, y}) => new CompositeKey([x, y]) });
+positions.add(position1);
+positions.add(position2);
+positions.size;                     // 1
+[...positions].at(0) === position1; // true
+```
+
+### Symbol.keyBy (follow on?)
+
+While being able to customize the `keyBy` function when constructing the collection provides flexibility, it may be common that the values themselves are best placed to define how their `CompositeKey` should be constructed to help ensure correctness.
+
+```js
+let positions = new Set([], { keyBy: ({x, y}) => new CompositeKey([x, y]), });
 
 positions.add({ x: 0, y: 0, z: 1 });
 positions.add({ x: 0, y: 0, z: 99 }); // 'z' prop is not inspected by the keyBy function
@@ -100,12 +174,9 @@ positions.add({ x: 0, y: 1 });
 positions.values().toArray(); // [{ x: 0, y: 0, z: 1 }, { x:0, y: 1 }]
 ```
 
-### Symbol.keyBy (follow on?)
-
-Introduce a new Well-known Symbol to act as a co-ordination point for the ecosystem.
+Introduce a new well-known Symbol to act as a co-ordination point.
 
 ```js
-
 class Position {
     x;
     y;
@@ -115,58 +186,86 @@ class Position {
         this.y = y;
     }
 
-    get [Symbol.keyBy]() {
+    [Symbol.keyBy]() {
         return new CompositeKey(Position, this.x, this.y);
     }
 }
 
-let positions = new Set([], { keyBy: Symbol.keyBy });
-positions.add(new Position(0, 0));
-positions.has(new Position(0, 0)); // true
+let positions = Set.usingKeys(); // name to be bike-shedded
+// sugar for:
+let positions = new Set([], { keyBy: (v) => v[Symbol.keyBy](), });
+
+positions.add(new Position(0, 1));
+positions.add(new Position(0, 1));
+positions.add(new Position(0, 2));
+positions.size; // 2
 ```
 
-There could potentially be a built-in decorator to aid classes in keeping their `Symbol.keyBy` protocol up-to-date as new fields are added.
+There can be `CompositeKey` static factory that looks up the this symbol on the arguments keeping the constructor the minimal required functionality.
+
+```js
+CompositeKey.of(position1, position2);
+
+// sugar for:
+function lookupKey(v) {
+    if (Object(v) === v) {
+        let keyBy = v[keyBy];
+        return typeof keyBy === "function"
+            ? Reflect.apply(keyBy, v, [])
+            : v; // or throw if no keyBy protocol ?
+    } else {
+        return v;
+    }
+}
+new CompositeKey([lookupKey(position1), lookupKey(position2)]);
+```
+
+There could potentially be a built-in decorator to aide classes in keeping their `Symbol.keyBy` protocol up-to-date as new fields are added.
 
 ```js
 class Position {
-    @CompositeKey.decorator
+    @CompositeKey.field
     x;
-    @CompositeKey.decorator
+    @CompositeKey.field
     y;
+    @CompositeKey.field
+    z;
 
-    constructor(x, y) {
+    constructor(x, y, z) {
         this.x = x;
         this.y = y;
+        this.z = z;
     }
 
-    @CompositeKey.decorator
-    get [Symbol.keyBy]() {}
+    [Symbol.keyBy]() {
+        return CompositeKey.keyFor(this); // no need to update as new fields are added
+    }
 }
 ```
 
 ### Records and Tuples (follow on?)
 
-We can also have built in values that implicitly implement the `Symbol.keyBy` protocol.
+We can also have built in immutable values that take this further by implicitly implementing the `Symbol.keyBy` protocol to further reduce the _noise_ and help ensure correctness.
 
 ```js
-
 let r1 = #{ x: 0, y: 0, offset: #[0, 0] };
 let r2 = #{ x: 0, y: 0, offset: #[0, 0] };
 
-CompositeKey.isKey(r1[Symbol.keyBy]); // true
 Object.isFrozen(r1); // true
-r1.x; // 0
-r1 === r2; // false
+r1.x;                // 0
+r1 === r2;           // false
 
-let s = new Set([r1], { keyBy: Symbol.keyBy });
-s.has(r2); // true
+r1[Symbol.keyBy]() instanceof CompositeKey; // true
+
+let s = Set.usingKeys([r1]);
+s.has(r2);           // true
 ```
 
 The built-in `keyBy` implementation of these types will also look up `Symbol.keyBy` on the values within the Record/Tuple.
 
 ### Existing Types (follow on?)
 
-Immutable values types such as those in Temporal can implement `Symbol.keyBy`, without requiring users to work out the best way to represent these types using a `CompositeKey`.
+Immutable values types such as those in Temporal could implement `Symbol.keyBy`, without requiring users to work out the best way to represent these types using a `CompositeKey`.
 
 ## Q+A
 
@@ -177,10 +276,12 @@ Immutable values types such as those in Temporal can implement `Symbol.keyBy`, w
     - The opt-in mode can be strict, and throw an Error if a value does not implement `Symbol.keyBy` rather than silently falling back to object identity.
 - Why not have a more traditional API where values implement a `hash()` and `equals(other)` methods?
     - A risk in implementing these methods separately is that they can be mis-aligned if one method is updated/refactored and the other isn't. Resulting in values that are equal but don't have match `hash` values.
-    - A `CompositeKey` can be thought of as a type that implements these on behalf of the user, ensuring that the two methods are aligned and equality follows the rules of reflectivity, symmetry, transitivity and consistency.
-    - The downside to this is that when comparing if two values are equal by comparing their `CompositeKeys`, both values need to produce a full `CompositeKey` rather than doing this gradually and exiting early as soon as one part does not match. A separate API for this use case could avoid this issue.
+        - A `CompositeKey` can be thought of as a type that implements these on behalf of the user, ensuring that the two methods are aligned and equality follows the rules of reflectivity, symmetry, transitivity and consistency.
+        - The downside to this is that when comparing if two values are equal by comparing their `CompositeKeys`, both values need to produce a full `CompositeKey` rather than doing this gradually and exiting early as soon as one part does not match. A separate API for this use case could avoid this issue.
+    - ECMA262 aims to be as deterministic as possible (`Date.now()` and `Math.random()` being examples of the few exceptions) and backwards-compatible with previous versions; this would mean that built-in hash functions would most likely need to be fully specified and limited ability to evolve the hashing algorithm. Exposing these low level details _may_ also pose a security risk.
+- What about membranes?
+    - More investigation required.
+    - Out of the box `CompositeKey` won't work across membranes because their uniqueness is encoded within an internal slot. Membranes would need to add explicit support for re-constructing CompositeKeys when used across a membrane.
 - What about `WeakMap` and `WeakSet`?
     - More investigation required.
-    - a `keyBy` function for these makes less sense because if the function returns a new value then the only reference to that value will be held weakly and therefore eligible for collection.
-    - A `new CompositeKey(0, 0)` does not hold any lifetime information, a matching `CompositeKey` can always be created if the _inputs_ are available.
-    - Allowing only `CompositeKeys` that were created from at least one value that itself is allowed as a `WeakMap` key could be an option.
+    - Not all `CompositeKey`s would carry object information. So it it might be that only `CompositeKeys` that were created from at least one value that itself is allowed as a `WeakMap` key would be permissable as a `WeakMap` key.
