@@ -4,13 +4,20 @@
 (function () {
     const { Map: OriginalMap } = globalThis;
 
-    let symbolsAsWeakMapKeys = false;
-    try {
-        // @ts-expect-error
-        new WeakSet([Symbol()]);
-        symbolsAsWeakMapKeys = true;
-    } catch {}
+    /**
+     * @type {<T>(f: () => T) => T}
+     */
+    const run = f => f();
 
+    const symbolsAsWeakMapKeys = run(() => {
+        try {
+            // @ts-expect-error
+            new WeakSet([Symbol()]);
+            return true;
+        } catch {
+            return false;
+        }
+    });
 
     /** @return {boolean} */
     function isObject(v) {
@@ -338,7 +345,7 @@
         /** @type {OpaqueId} */
         #id;
 
-        constructor(values = []) {
+        constructor(...values) {
             this.#id = CompositeKey.#root.getId(values);
         }
 
@@ -355,7 +362,7 @@
         }
 
         static of(...values) {
-            return new CompositeKey(values.map(trySymbol));
+            return new CompositeKey(...values.map(trySymbol));
         }
 
         /** @private */

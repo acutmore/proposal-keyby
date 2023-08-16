@@ -41,7 +41,7 @@ test("Map keyBy function", () => {
 
 describe("CompositeKey", (t) => {
     it("has opaque instances", () => {
-        let keys = Reflect.ownKeys(new CompositeKey([1, 2]));
+        let keys = Reflect.ownKeys(new CompositeKey(1, 2));
         assert.deepEqual(keys, []);
     });
     it("brand check", () => {
@@ -49,30 +49,30 @@ describe("CompositeKey", (t) => {
     });
     it("equality", () => {
         let obj = {};
-        let k1 = new CompositeKey([1, obj]);
-        let k2 = new CompositeKey([1, obj]);
-        let k3 = new CompositeKey([9, obj]);
+        let k1 = new CompositeKey(1, obj);
+        let k2 = new CompositeKey(1, obj);
+        let k3 = new CompositeKey(9, obj);
         assert.notStrictEqual(k1, k2);
         assert(CompositeKey.equal(k1, k2));
         assert(!CompositeKey.equal(k1, k3));
     });
     it("ordinal", () => {
-        let k1 = new CompositeKey([1, 2]);
-        let k2 = new CompositeKey([2, 1]);
+        let k1 = new CompositeKey(1, 2);
+        let k2 = new CompositeKey(2, 1);
         assert(!CompositeKey.equal(k1, k2));
     });
     it("no prefix matching", () => {
-        let k1 = new CompositeKey([1, 2]);
-        let k2 = new CompositeKey([1, 2, 3]);
+        let k1 = new CompositeKey(1, 2);
+        let k2 = new CompositeKey(1, 2, 3);
         assert(!CompositeKey.equal(k1, k2));
         assert(!CompositeKey.equal(k2, k1));
     });
     it("recursive equality", () => {
-        let innerKey1 = new CompositeKey([1]);
-        let innerKey2 = new CompositeKey([1]);
-        let outerKey1 = new CompositeKey([2, innerKey1]);
-        let outerKey2 = new CompositeKey([2, innerKey2]);
-        let outerKey3 = new CompositeKey([2, 1]);
+        let innerKey1 = new CompositeKey(1);
+        let innerKey2 = new CompositeKey(1);
+        let outerKey1 = new CompositeKey(2, innerKey1);
+        let outerKey2 = new CompositeKey(2, innerKey2);
+        let outerKey3 = new CompositeKey(2, 1);
         assert(CompositeKey.equal(outerKey1, outerKey2));
         assert(!CompositeKey.equal(outerKey1, outerKey3));
     });
@@ -80,8 +80,8 @@ describe("CompositeKey", (t) => {
 
 describe("Map + CompositeKey", () => {
     it("CK are treated as normal objects by default", () => {
-        let key1 = new CompositeKey([1]);
-        let key2 = new CompositeKey([1]);
+        let key1 = new CompositeKey(1);
+        let key2 = new CompositeKey(1);
         let m = new Map();
         m.set(key1, 42);
         assert.equal(m.get(key1), 42);
@@ -90,10 +90,10 @@ describe("Map + CompositeKey", () => {
     it("CK are handled specially by keyBy lookups", () => {
         let m = new Map([], { keyBy: v => v["key"] });
         let objA = {
-            key: new CompositeKey([1]),
+            key: new CompositeKey(1),
         };
         let objB = {
-            key: new CompositeKey([1]),
+            key: new CompositeKey(1),
         };
         m.set(objA, 42);
         assert.equal(m.get(objB), [42]);
