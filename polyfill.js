@@ -381,7 +381,7 @@
     }
 
     /** @public */
-    class CustomKeyMap {
+    class MapPolyfill {
         #state = new OriginalMap();
         #keyBy;
 
@@ -439,7 +439,7 @@
         }
 
         forEach(mapper, thisArg = undefined) {
-            return this.#state.forEach(mapper, thisArg);
+            return this.#state.forEach((k, v) => mapper.call(thisArg, k, v, this));
         }
 
         *keys() {
@@ -469,7 +469,71 @@
         }
 
         static get [Symbol.species]() {
-            return Map;
+            return this;
+        }
+
+        /**
+         * @param {ReadonlyArray<ReadonlyArray<any>> | Iterable<ReadonlyArray<any>> | null} [values]
+         */
+        static usingKeys(values) {
+            return new this(values, { keyBy: trySymbol });
+        }
+    }
+
+    class SetPolyFill {
+        #state;
+
+        constructor(values, config) {
+            this.#state = new MapPolyfill(values?.map(v => [v, v]), config);
+        }
+
+        get size() {
+            return this.#state.size;
+        }
+
+        add(v) {
+            this.#state.set(v, v);
+            return this;
+        }
+
+        has(v) {
+            return this.#state.has(v);
+        }
+
+        delete(v) {
+            return this.#state.delete(v);
+        }
+
+        clear() {
+            return this.#state.clear();
+        }
+
+        forEach(mapper, thisArg = undefined) {
+            this.#state.forEach((_key, value) => mapper.call(value, this));
+        }
+
+        keys() {
+            return this.#state.keys();
+        }
+
+        values() {
+            return this.#state.keys();
+        }
+
+        entries() {
+            return this.#state.entries();
+        }
+
+        [Symbol.iterator]() {
+            return this.keys();
+        }
+
+        static get [Symbol.species]() {
+            return this;
+        }
+
+        get [Symbol.toStringTag]() {
+            return "Set";
         }
 
         /**
@@ -598,7 +662,8 @@
 
     // exports:
     globalThis.CompositeKey = CompositeKey;
-    globalThis.Map = CustomKeyMap;
+    globalThis.Map = MapPolyfill;
+    globalThis.Set = SetPolyFill;
     globalThis.Record = Record;
     globalThis.Tuple = Tuple;
     Object.defineProperty(Symbol, "keyBy", {

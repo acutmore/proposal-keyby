@@ -40,6 +40,23 @@ test("Map keyBy function", () => {
     assert.strictEqual(entries.at(0).at(0), objA);
 });
 
+test("Set still works as usual", () => {
+    let key = {};
+    const s = new Set([key]);
+    assert(s.has(key));
+    assert.equal(s.size, 1);
+    s.add({}, 99);
+    assert.equal(s.size, 2);
+});
+
+test("Set keyBy ", () => {
+    const s = new Set([], { keyBy: v => v.id });
+    s.add({id: 1});
+    assert(s.has({id: 1}));
+    const values = [...s];
+    assert.deepStrictEqual(values, [{ id: 1 }]);
+});
+
 describe("CompositeKey", (t) => {
     it("has opaque instances", () => {
         let keys = Reflect.ownKeys(new CompositeKey(1, 2));
