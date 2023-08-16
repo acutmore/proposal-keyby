@@ -5,6 +5,7 @@ import "./polyfill.js";
 test("polyfill has added globals", () => {
     assert.equal(typeof globalThis.CompositeKey, "function");
     assert.equal(typeof globalThis.Record, "function");
+    assert.equal(typeof globalThis.Tuple, "function");
     assert.equal(typeof globalThis.Symbol.keyBy, "symbol");
 });
 
@@ -145,6 +146,22 @@ describe("Record", () => {
             outerRec2[Symbol.keyBy](),
         ));
     });
+});
+
+test("Tuple", () => {
+    let tup1 = Tuple(1, 2);
+    assert(Object.isFrozen(tup1));
+    assert.deepEqual(tup1, [1, 2]);
+    assert(Array.isArray(tup1));
+
+    let tup2 = Tuple(1, 2);
+    assert.notStrictEqual(tup1, tup2);
+
+    let key1 = tup1[Symbol.keyBy]();
+    assert(CompositeKey.isKey(key1));
+
+    let key2 = tup2[Symbol.keyBy]();
+    assert(CompositeKey.equal(key1, key2));
 });
 
 test("Map.usingKeys + Record", () => {

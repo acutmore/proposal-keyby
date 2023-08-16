@@ -473,6 +473,8 @@
 
     /** @private */
     const RecordNamespace = Symbol();
+    /** @private */
+    const TupleNamespace = Symbol();
 
     function keyForRecord(r) {
         return new CompositeKey([
@@ -483,7 +485,11 @@
                     v = trySymbol(v);
                     return [k, v];
                 }),
-        ]);
+    function keyForTuple(t) {
+        return new CompositeKey(
+            TupleNamespace,
+            ...t.map(trySymbol),
+        );
     }
 
     /** @public */
@@ -498,10 +504,22 @@
         return r;
     }
 
+    /** @public */
+    function Tuple(...t) {
+        let ck;
+        Object.defineProperty(t, SymbolKeyBy, {
+            enumerable: false,
+            value: () => ck ??= keyForTuple(t)
+        });
+        Object.freeze(t);
+        return t;
+    }
+
     // exports:
     globalThis.CompositeKey = CompositeKey;
     globalThis.Map = CustomKeyMap;
     globalThis.Record = Record;
+    globalThis.Tuple = Tuple;
     Object.defineProperty(Symbol, "keyBy", {
         value: SymbolKeyBy,
     });
