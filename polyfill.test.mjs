@@ -146,6 +146,51 @@ describe("Record", () => {
             outerRec2[Symbol.keyBy](),
         ));
     });
+    it("registered symbols are allowed and are part of the equality", (t) => {
+        let rec1 = Record({ [Symbol.for("a")]: "a", [Symbol.for("b")]: "b" });
+        let rec2 = Record({ [Symbol.for("b")]: "b", [Symbol.for("a")]: "a" });
+        let rec3 = Record({ [Symbol.for("b")]: "b", [Symbol.for("c")]: "c" });
+
+        // order is preserved
+        assert.deepStrictEqual(Reflect.ownKeys(rec1), [Symbol.for("a"), Symbol.for("b"), Symbol.keyBy]);
+        assert.deepStrictEqual(Reflect.ownKeys(rec2), [Symbol.for("b"), Symbol.for("a"), Symbol.keyBy]);
+
+        assert(CompositeKey.equal(
+            rec1[Symbol.keyBy](),
+            rec2[Symbol.keyBy](),
+        ));
+
+        // different symbols -> not equal
+        assert(!CompositeKey.equal(
+            rec2[Symbol.keyBy](),
+            rec3[Symbol.keyBy](),
+        ));
+    });
+    it("non-registered symbols are allowed and are part of the equality", (t) => {
+        let s1 = Symbol();
+        let s2 = Symbol();
+        let s3 = Symbol();
+
+        let rec1 = Record({ [s1]: 1, [s2]: 2 });
+        let rec2 = Record({ [s2]: 2, [s1]: 1 });
+        let rec3 = Record({ [s2]: 2, [s3]: 3 });
+
+        // order is preserved
+        assert.deepStrictEqual(Reflect.ownKeys(rec1), [s1, s2, Symbol.keyBy]);
+        assert.deepStrictEqual(Reflect.ownKeys(rec2), [s2, s1, Symbol.keyBy]);
+
+        // order doesn't impact equality
+        assert(CompositeKey.equal(
+            rec1[Symbol.keyBy](),
+            rec2[Symbol.keyBy](),
+        ));
+
+        // different symbols -> not equal
+        assert(!CompositeKey.equal(
+            rec2[Symbol.keyBy](),
+            rec3[Symbol.keyBy](),
+        ));
+    });
 });
 
 test("Tuple", () => {

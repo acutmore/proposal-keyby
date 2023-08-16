@@ -476,15 +476,84 @@
     /** @private */
     const TupleNamespace = Symbol();
 
+    /**
+     * A comparison function to create a global ordering of symbols. The order is not observable, it is only used internally.
+     * @private
+     * @type {(s1: symbol, s2: symbol) => number}
+     */
+    const symbolOrder = run(() => {
+        /** @typedef {Omit<MapLike<symbol, number>, "size">} SymbolNumberMap */
+
+        const numberForSymbol = /** @type {SymbolNumberMap} */(
+            symbolsAsWeakMapKeys ? new WeakMap() : new OriginalMap()
+        );
+        let nextNumber = 0;
+
+        const getNumberForSymbol = (/** @type {symbol} */ s) => {
+            let n = numberForSymbol.get(s);
+            if (n === undefined) {
+                n = nextNumber++;
+                numberForSymbol.set(s, n);
+            }
+            return n;
+        };
+
+        return function compare(s1, s2) {
+            const string1 = Symbol.keyFor(s1);
+            const string2 = Symbol.keyFor(s2);
+            if (string1 !== undefined) {
+                if (string2 !== undefined) {
+                    // both registered
+                    return string1.localeCompare(string2);
+                }
+                // only s1 is registered
+                return -1;
+            }
+            if (string2 !== undefined) {
+                // only s2 is registered
+                return +1;
+            }
+            // both unregistered
+            return getNumberForSymbol(s1) - getNumberForSymbol(s2);
+        }
+    });
+
+    /**
+     * @param {string | symbol} k1
+     * @param {string | symbol} k2
+     * @returns {number}
+     */
+    function compareKeys(k1, k2) {
+        if (typeof k1 === "symbol") {
+            if (typeof k2 === "symbol") {
+                // both symbols
+                return symbolOrder(k1, k2);
+            }
+            // k1: symbol, k2: string
+            return -1;
+        }
+        // k1: string
+        if (typeof k2 === "symbol") {
+            return +1;
+        }
+        // both strings
+        return k1.localeCompare(k2);
+    }
+
     function keyForRecord(r) {
-        return new CompositeKey([
+        return new CompositeKey(
             RecordNamespace,
-            ...Object.entries(r)
-                .sort(([k1], [k2]) => k1.localeCompare(k2)) // TODO symbol keys?
-                .flatMap(([k, v]) => {
+            ...Reflect.ownKeys(r)
+                .filter(k => k !== SymbolKeyBy)
+                .sort((k1, k2) => compareKeys(k1, k2))
+                .flatMap((k) => {
+                    let v = r[k];
                     v = trySymbol(v);
                     return [k, v];
                 }),
+        );
+    }
+
     function keyForTuple(t) {
         return new CompositeKey(
             TupleNamespace,
@@ -496,10 +565,13 @@
     function Record(obj) {
         let ck;
         const r = { ...obj };
-        Object.defineProperty(r, SymbolKeyBy, {
-            enumerable: false,
-            value: () => ck ??= keyForRecord(r)
-        });
+        const overridesKeyBy = Object.getOwnPropertyDescriptor(r, SymbolKeyBy) !== undefined;
+        if (!overridesKeyBy) {
+            Object.defineProperty(r, SymbolKeyBy, {
+                enumerable: false,
+                value: () => ck ??= keyForRecord(r)
+            });
+        }
         Object.freeze(r);
         return r;
     }
