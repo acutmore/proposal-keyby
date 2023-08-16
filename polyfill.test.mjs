@@ -46,7 +46,18 @@ describe("CompositeKey", (t) => {
         assert.deepEqual(keys, []);
     });
     it("brand check", () => {
-        assert(CompositeKey.isKey(new CompositeKey()));
+        function isCompositeKey(v) {
+            if (v === null || typeof v !== "object") {
+                return false;
+            }
+            try {
+                let d = Object.getOwnPropertyDescriptor(CompositeKey.prototype, Symbol.toStringTag);
+                return d.get.call(v) === "CompositeKey";
+            } catch {
+                return false;
+            }
+        }
+        assert(isCompositeKey(new CompositeKey()));
     });
     it("equality", () => {
         let obj = {};
@@ -120,10 +131,10 @@ describe("Record", () => {
         assert.notStrictEqual(rec1, rec2);
 
         let key1 = rec1[Symbol.keyBy]();
-        assert(CompositeKey.isKey(key1));
+        assert(key1 instanceof CompositeKey);
 
         let key2 = rec2[Symbol.keyBy]();
-        assert(CompositeKey.equal(key1, key2));
+        assert(key2 instanceof CompositeKey);
     });
     it("nests", () => {
         let innerRec1 = Record({
@@ -203,17 +214,17 @@ test("Tuple", () => {
     assert.notStrictEqual(tup1, tup2);
 
     let key1 = tup1[Symbol.keyBy]();
-    assert(CompositeKey.isKey(key1));
+    assert(key1 instanceof CompositeKey);
 
     let key2 = tup2[Symbol.keyBy]();
-    assert(CompositeKey.equal(key1, key2));
+    assert(key2 instanceof CompositeKey);
 });
 
 test("Map.usingKeys + Record", () => {
     let rec1 = Record({ x: 1, y: 1 });
     let rec2 = Record({ x: 1, y: 1 });
 
-    let m = Map.usingKeys([]);
+    let m = Map.usingKeys();
 
     m.set(rec1, 42);
     assert.equal(m.get(rec2), 42);

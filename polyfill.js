@@ -311,8 +311,8 @@
                 // skip over, flagging that we did this
                 return this.getId(values, index + 1, /* seenEternal: */ true);
             }
-            head = CompositeKey.isKey(head)
-                ? CompositeKey["__keyId"](head)
+            head = isCompositeKey(head)
+                ? getKeyIdentity(head)
                 : head;
             const nextNode = mapGetOrInsert(
                 this.nextNode,
@@ -334,10 +334,21 @@
         return v;
     }
 
+    /** @type {(v: unknown) => v is CompositeKey} */
+    let isCompositeKey;
+
+    /** @type {(v: CompositeKey) => OpaqueId} */
+    let getKeyIdentity;
+
     /** @public */
     class CompositeKey {
         static {
-            globalThis.CompositeKey = CompositeKey;
+            /** @returns {v is CompositeKey} */
+            isCompositeKey = function isKey(v) {
+                return v !== null && typeof v === "object" && #id in v;
+            }
+
+            getKeyIdentity = (v) => v.#id;
         }
 
         static #root = new GCNode(null, null);
@@ -353,8 +364,11 @@
             return this;
         }
 
-        static isKey(v) {
-            return typeof v === "object" && v !== null && #id in v;
+        get [Symbol.toStringTag]() {
+            if (! (#id in this)) {
+                throw new TypeError("receiver is not a CompositeKey");
+            }
+            return "CompositeKey";
         }
 
         static equal(a, b) {
@@ -363,11 +377,6 @@
 
         static of(...values) {
             return new CompositeKey(...values.map(trySymbol));
-        }
-
-        /** @private */
-        static __keyId(v) {
-            return v.#id;
         }
     }
 
@@ -390,8 +399,8 @@
                 }
                 this.#keyBy = (v) => {
                     let k = keyByConfig(v);
-                    if (CompositeKey.isKey(k)) {
-                        k = CompositeKey["__keyId"](k);
+                    if (isCompositeKey(k)) {
+                        k = getKeyIdentity(k);
                     }
                     return k;
                 };
