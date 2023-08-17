@@ -2,6 +2,7 @@
 # Proposal KeyBy
 
 This is a different take on https://github.com/tc39/proposal-richer-keys, looking at the same problem of "richer keys".
+It also includes an alternative to https://github.com/tc39/proposal-record-tuple.
 
 ## The issue
 
@@ -122,6 +123,10 @@ This pairs nicely with the `Map`/`Set` config, allowing for more interesting key
 
 ```js
 let positions = new Set([], { keyBy: ({x, y}) => new CompositeKey(x, y) });
+
+let position1 = Object.freeze({ x: 0, y: 0 });
+let position2 = Object.freeze({ x: 0, y: 0 });
+
 positions.add(position1);
 positions.add(position2);
 positions.size;                     // 1
@@ -154,7 +159,7 @@ positions.add({ x: 0, y: 1 });
 positions.values().toArray(); // [{ x: 0, y: 0, z: 1 }, { x:0, y: 1 }]
 ```
 
-Introduce a new well-known Symbol to act as a co-ordination point.
+Introduce a new well-known Symbol to act as a co-ordination point:
 
 ```js
 class Position {
@@ -181,10 +186,10 @@ positions.add(new Position(0, 2));
 positions.size; // 2
 ```
 
-There can be `CompositeKey` static factory that looks up the this symbol on the arguments keeping the constructor the minimal required functionality.
+There can be a `CompositeKey` static factory that looks up the this symbol on the arguments keeping the constructor the minimal required functionality.
 
 ```js
-CompositeKey.of(position1, position2);
+CompositeKey.of(position1, position2); // name tbc
 
 // ~sugar for:
 function lookupKey(v) {
@@ -228,9 +233,10 @@ class Position {
 We can also have built in immutable values that take this further by implicitly implementing the `Symbol.keyBy` protocol to further reduce common boilerplate and help ensure correctness.
 
 ```js
-let r1 = #{ x: 0, y: 0, offset: #[0, 0] };
-let r2 = #{ x: 0, y: 0, offset: #[0, 0] };
+let r1 =       #{ x: 0, y: 0, offset: #[0, 0] };
+let r2 = Record({ x: 0, y: 0, offset: Tuple(0, 0) });
 
+typeof r1;           // "object"
 Object.isFrozen(r1); // true
 r1.x;                // 0
 r1 === r2;           // false
@@ -241,7 +247,7 @@ let s = Set.usingKeys([r1]);
 s.has(r2);           // true
 ```
 
-The built-in `keyBy` implementation of these types will also look up `Symbol.keyBy` on the values within the Record/Tuple.
+The built-in `keyBy` implementation of these types will also look up `Symbol.keyBy` on the values within the Record/Tuple. i.e. it is deep equality, not shallow.
 
 ### Existing Types (follow on?)
 
@@ -264,6 +270,7 @@ Immutable values types such as those in Temporal could implement `Symbol.keyBy`,
     - Here R&T are just plain objects and arrays, not primitives
     - They do not enforce deeply immutable structures
     - They can contain any value, including functions
+      - However if the values do not implement `Symbol.keyBy` then `Symbol.keyBy` on the R/T will throw, rather than silently/implicitly fallback to object identity.
     - They do not compare using `===`, likely making them simpler for engines to implement
 - What about mutability?
     - It is only strongly encouraged that `Symbol.keyBy` is implemented on values that are not mutated so that it behaves consistency. There is no protection against a badly behaving `Symbol.keyBy` method.

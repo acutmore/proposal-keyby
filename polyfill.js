@@ -271,7 +271,7 @@
 
     /** @private */
     class GCNode extends AbstractNode {
-        static #transitionMarker = symbolsAsWeakMapKeys ? Symbol("<transition>") : {"<transition>": true};
+        static #transitionMarker = Object.freeze({"<transition>": true});
 
         /**
          * @param {AbstractNode | null} parent
