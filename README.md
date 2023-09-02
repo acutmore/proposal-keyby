@@ -96,9 +96,10 @@ Allow `Map` and `Set` instances to be customized with a lookup function that wil
 
 ```js
 let keyBySet = new Set([], { keyBy: (v) => v.uuid, });
-keyBySet.add({ uuid: "ABCDE" });
-keyBySet.has({ uuid: "ABCDE" }); // true
-[...keyBySet];                   // [{ uuid: "ABCDE" }]
+keyBySet.add({ uuid: "ABCDE", id: 1 });
+keyBySet.add({ uuid: "ABCDE", id: 2 });
+keyBySet.has({ uuid: "ABCDE", id: 3 }); // true
+[...keyBySet];                   // [{ uuid: "ABCDE", id: 1 }]
 ```
 
 This addresses the issue of using two separate collections to achieve these semantics.
