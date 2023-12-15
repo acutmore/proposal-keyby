@@ -12,7 +12,7 @@ Right now `Map` and `Set` always use [SameValueZero](https://tc39.es/ecma262/mul
 new Set([42, 42]).size; // 1
 new Set([{}, {}]).size; // 2;
 
-let m = new Map();
+const m = new Map();
 
 m.set("hello", "world");
 m.set({}, "object");
@@ -24,10 +24,10 @@ m.has({});      // false
 As shown above, this means that when it comes to objects, all objects are only equal to themselves. There is no capability to override this behavior and allow two different objects to be treated equal within the collection.
 
 ```js
-let position1 = Object.freeze({ x: 0, y: 0 });
-let position2 = Object.freeze({ x: 0, y: 0 });
+const position1 = Object.freeze({ x: 0, y: 0 });
+const position2 = Object.freeze({ x: 0, y: 0 });
 
-let positions = new Set([position1, position2]);
+const positions = new Set([position1, position2]);
 positions.size; // 2
 ```
 
@@ -95,11 +95,12 @@ Listing all of them here is to set out a vision of where we could end up in the 
 Allow `Map` and `Set` instances to be customized with a lookup function that will produce the value that will internally represent the key's uniqueness for that collection.
 
 ```js
-let keyBySet = new Set([], { keyBy: (v) => v.uuid, });
+const keyBySet = new Set([], { keyBy: (v) => v.uuid });
 keyBySet.add({ uuid: "ABCDE", id: 1 });
 keyBySet.add({ uuid: "ABCDE", id: 2 });
+
 keyBySet.has({ uuid: "ABCDE", id: 3 }); // true
-[...keyBySet];                   // [{ uuid: "ABCDE", id: 1 }]
+[...keyBySet];                          // [{ uuid: "ABCDE", id: 1 }]
 ```
 
 This addresses the issue of using two separate collections to achieve these semantics.
@@ -109,9 +110,10 @@ This addresses the issue of using two separate collections to achieve these sema
 Introduce a `CompositeKey` type. This type can represent the compound equality of a sequence of values.
 
 ```js
-let key1 = new CompositeKey(0, 0);
-let key2 = new CompositeKey(0, 0);
-let key3 = new CompositeKey(0, 1);
+const key1 = new CompositeKey(0, 0);
+const key2 = new CompositeKey(0, 0);
+const key3 = new CompositeKey(0, 1);
+
 key1 !== key2;                       // true (separate objects)
 CompositeKey.equal(key1, key2);      // true
 CompositeKey.equal(key1, key3);      // false
@@ -123,10 +125,10 @@ Object.isFrozen(key1);               // false (the key's value is internal+priva
 This pairs nicely with the `Map`/`Set` config, allowing for more interesting keys. When the `keyBy` function returns a `CompositeKey` it is not compared with other values using `SameValueZero` but by the equality of two `CompositeKey`s.
 
 ```js
-let positions = new Set([], { keyBy: ({x, y}) => new CompositeKey(x, y) });
+const positions = new Set([], { keyBy: ({x, y}) => new CompositeKey(x, y) });
 
-let position1 = Object.freeze({ x: 0, y: 0 });
-let position2 = Object.freeze({ x: 0, y: 0 });
+const position1 = Object.freeze({ x: 0, y: 0 });
+const position2 = Object.freeze({ x: 0, y: 0 });
 
 positions.add(position1);
 positions.add(position2);
@@ -137,12 +139,12 @@ positions.size;                     // 1
 `CompositeKey` can be nested recursively with the resulting 'structure' participating in the equality. A _CompositeTree_ if you will.
 
 ```js
-let key1 = new CompositeKey(1, new CompositeKey(2, 3));
-let key2 = new CompositeKey(1, new CompositeKey(2, 3));
+const key1 = new CompositeKey(1, new CompositeKey(2, 3));
+const key2 = new CompositeKey(1, new CompositeKey(2, 3));
 
 CompositeKey.equal(key1, key2); // true
 
-let key3 = new CompositeKey(1, 2, 3);
+const key3 = new CompositeKey(1, 2, 3);
 CompositeKey.equal(key1, key3); // false (nesting keys does not flatten them)
 ```
 
@@ -151,7 +153,7 @@ CompositeKey.equal(key1, key3); // false (nesting keys does not flatten them)
 While being able to customize the `keyBy` function when constructing the collection provides flexibility, it may be common that the values themselves are best placed to define how their `CompositeKey` should be constructed to help ensure correctness.
 
 ```js
-let positions = new Set([], { keyBy: ({x, y}) => new CompositeKey(x, y), });
+const positions = new Set([], { keyBy: ({x, y}) => new CompositeKey(x, y) });
 
 positions.add({ x: 0, y: 0, z: 1 });
 positions.add({ x: 0, y: 0, z: 99 }); // 'z' prop is not inspected by the keyBy function
@@ -177,9 +179,9 @@ class Position {
     }
 }
 
-let positions = Set.usingKeys(); // name to be bike-shedded
+const positions = Set.usingKeys(); // name to be bike-shedded
 // ~sugar for:
-let positions = new Set([], { keyBy: (v) => v[Symbol.keyBy](), });
+const positions = new Set([], { keyBy: (v) => v[Symbol.keyBy](), });
 
 positions.add(new Position(0, 1));
 positions.add(new Position(0, 1));
