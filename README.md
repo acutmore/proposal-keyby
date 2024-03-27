@@ -1,5 +1,5 @@
 
-# Proposal KeyBy
+# Exploring 'KeyBy'
 
 This is a different take on https://github.com/tc39/proposal-richer-keys, looking at the same problem of "richer keys".
 It also includes an alternative to https://github.com/tc39/proposal-record-tuple.
